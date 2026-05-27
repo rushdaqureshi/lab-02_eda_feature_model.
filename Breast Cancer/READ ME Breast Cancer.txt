@@ -1,0 +1,109 @@
+# RUSHDA QURESHI-2503951-MSBAWE2
+
+# 1. Setup
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.metrics import classification_report, mean_squared_error, confusion_matrix
+
+# Adjust display options
+pd.set_option('display.max_columns', None)
+sns.set_style("whitegrid")
+
+# 2. Data Loading
+df = pd.read_csv('data.csv')
+df = df.drop(columns=['id', 'Unnamed: 32'], errors='ignore')
+print(f"Dataset Shape: {df.shape}")
+print(df.info())
+
+# 3. Exploratory Data Analysis (EDA)
+# 4. Univariate analysis
+print("\nDescriptive Statistics:\n", df.describe())
+plt.figure(figsize=(6, 4))
+sns.histplot(df['radius_mean'], kde=True, color='blue')
+plt.title('Univariate: Distribution of Radius Mean')
+
+# 5. Bivariate analysis
+plt.figure(figsize=(8, 6))
+sns.scatterplot(x='radius_mean', y='texture_mean', hue='diagnosis', data=df)
+plt.title('Bivariate: Radius vs Texture')
+
+# 6. Correlation matrix and heatmap
+plt.figure(figsize=(10, 8))
+corr = df.select_dtypes(include=[np.number]).corr()
+sns.heatmap(corr, cmap='coolwarm', annot=False)
+plt.title('Correlation Heatmap')
+
+# 7. Class imbalance
+print("\nClass Proportions:\n", df['diagnosis'].value_counts(normalize=True))
+sns.countplot(x='diagnosis', data=df)
+plt.title('Target Class Balance')
+
+# 8. Outlier detection (Z-scores)
+# Calculation for radius_mean as an example
+z_scores = np.abs((df['radius_mean'] - df['radius_mean'].mean()) / df['radius_mean'].std())
+outliers = df[z_scores > 3]
+print(f"\nNumber of outliers detected (Radius Mean): {len(outliers)}")
+
+# 10. Feature Engineering, Encoding and Scaling
+# 11. Identify types
+numerical_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+categorical_cols = df.select_dtypes(exclude=[np.number]).columns.tolist()
+
+# 12. Engineer new features (Breast Cancer specific: Interaction)
+df['radius_texture_interaction'] = df['radius_mean'] * df['texture_mean']
+
+# 13. Encode categorical variables
+le = LabelEncoder()
+df['diagnosis'] = le.fit_transform(df['diagnosis']) # M=1, B=0
+
+# --- SAVE CLEANED DATASET ---
+df.to_csv('processed_breast_cancer.csv', index=False)
+print("\nCleaned dataset saved as 'processed_breast_cancer.csv'")
+
+# 15. Train/Test Split and Cross-Validation
+# 16. Define X and y
+X = df.drop('diagnosis', axis=1)
+y = df['diagnosis']
+
+# 17. Split the data (Stratified)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42, stratify=y
+)
+
+# 14. Scale numerical variables
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# 19. Linear and Logistic Regression Models
+# 20. Linear Regression (Baseline)
+lin_reg = LinearRegression()
+lin_reg.fit(X_train_scaled, y_train)
+print(f"\nLinear Regression R-squared: {lin_reg.score(X_test_scaled, y_test):.4f}")
+
+# 21. Logistic Regression (Primary Model)
+log_reg = LogisticRegression(max_iter=1000)
+log_reg.fit(X_train_scaled, y_train)
+
+# Cross-validation
+cv_scores = cross_val_score(log_reg, X_train_scaled, y_train, cv=5, scoring='accuracy')
+print(f"Logistic Regression CV Accuracy: {cv_scores.mean():.4f}")
+
+# Confusion Matrix Heatmap
+plt.figure(figsize=(5, 4))
+cm = confusion_matrix(y_test, log_reg.predict(X_test_scaled))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+plt.xlabel('Predicted')
+plt.ylabel('Actual')
+plt.title('Logistic Regression Confusion Matrix')
+
+# 22. Interpretation
+# Check feature influence via coefficients
+importance = pd.DataFrame({'Feature': X.columns, 'Coefficient': log_reg.coef_[0]})
+importance = importance.sort_values(by='Coefficient', ascending=False)
+print("\nTop 5 Influential Features:\n", importance.head(5))
