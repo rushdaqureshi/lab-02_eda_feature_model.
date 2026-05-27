@@ -1,0 +1,109 @@
+RUSHDA QURESHI-2503951-MSBAWE2
+
+
+###-1. Data Loading and Initial Inspection
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error, r2_score
+
+sns.set_style("whitegrid")
+
+# Load both datasets (note the ';' delimiter)
+red_wine = pd.read_csv('winequality-red.csv', sep=';')
+white_wine = pd.read_csv('winequality-white.csv', sep=';')
+
+# Add a 'type' column to keep track of the wine variety
+red_wine['type'] = 'red'
+white_wine['type'] = 'white'
+
+# Combine into one dataframe
+df = pd.concat([red_wine, white_wine], ignore_index=True)
+
+# Save the combined dataset
+df.to_csv('Combined_Wine_Quality.csv', index=False)
+print("Files combined successfully. Shape:", df.shape)
+
+## 3. Exploratory Data Analysis (EDA)
+# 4. Univariate analysis
+print("\nDescriptive Statistics:\n", df.describe())
+sns.histplot(df['alcohol'], kde=True, color='purple')
+plt.title('Distribution of Alcohol Content')
+plt.show()
+
+# 5. Bivariate analysis: Fixed Acidity vs Citric Acid (Strong correlation)
+sns.scatterplot(x='fixed acidity', y='citric acid', hue='type', data=df, alpha=0.4)
+plt.title('Bivariate: Fixed Acidity vs Citric Acid')
+plt.show()
+
+# Box Plot: Alcohol vs Quality
+sns.boxplot(x='quality', y='alcohol', data=df)
+plt.title('Alcohol Content by Wine Quality')
+plt.show()
+
+# 6. Correlation matrix and heatmap
+plt.figure(figsize=(10, 8))
+sns.heatmap(df.select_dtypes(include=[np.number]).corr(), annot=True, cmap='RdYlGn', fmt='.2f')
+plt.title('Feature Correlation Heatmap')
+plt.show()
+
+# 7. Class imbalance (Quality distribution)
+print("\nQuality Score Distribution:\n", df['quality'].value_counts(normalize=True).sort_index())
+
+# 8. Outlier detection (Z-scores for Residual Sugar)
+z_sugar = np.abs((df['residual sugar'] - df['residual sugar'].mean()) / df['residual sugar'].std())
+print(f"Residual Sugar Outliers (Z > 3): {(z_sugar > 3).sum()}")
+
+# 10. Feature Engineering
+# 12. New Features: Alcohol/Density Ratio & High Quality Flag
+df['alcohol_density_ratio'] = df['alcohol'] / df['density']
+df['high_quality'] = (df['quality'] >= 7).astype(int)
+
+# 13. Encode categorical 'type'
+df['type_red'] = (df['type'] == 'red').astype(int)
+
+# --- SAVE CLEANED DATASET ---
+df.to_csv('cleaned_wine_data.csv', index=False)
+print("\nCleaned dataset saved as 'cleaned_wine_data.csv'")
+
+# 15. Train/Test Split (For Regression on Quality)
+X = df.drop(['quality', 'type', 'high_quality'], axis=1)
+y = df['quality']
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# 14. Scaling
+scaler = StandardScaler()
+X_train_scaled = scaler.fit_transform(X_train)
+X_test_scaled = scaler.transform(X_test)
+
+# 18. Cross-Validation (RMSE)
+lin_reg = LinearRegression()
+cv_mse = -cross_val_score(lin_reg, X_train_scaled, y_train, cv=5, scoring='neg_mean_squared_error')
+print(f"CV Root Mean Squared Error (RMSE): {np.sqrt(cv_mse.mean()):.4f}")
+
+# 19. Linear Regression Model
+lin_reg.fit(X_train_scaled, y_train)
+y_pred = lin_reg.predict(X_test_scaled)
+
+# 20. Evaluation
+print(f"R-squared: {r2_score(y_test, y_pred):.4f}")
+print(f"MSE: {mean_squared_error(y_test, y_pred):.4f}")
+
+# Residual Plot
+plt.figure(figsize=(8, 5))
+sns.scatterplot(x=y_pred, y=(y_test - y_pred))
+plt.axhline(0, color='red', linestyle='--')
+plt.title('Residual Plot (Linear Regression)')
+plt.xlabel('Predicted Quality')
+plt.ylabel('Residuals')
+plt.show()
+
+# 22. Interpretation
+coeffs = pd.DataFrame({'Feature': X.columns, 'Coefficient': lin_reg.coef_})
+print("\nTop Contributing Features:\n", coeffs.sort_values(by='Coefficient', ascending=False))
